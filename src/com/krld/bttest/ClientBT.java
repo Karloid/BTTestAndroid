@@ -11,7 +11,6 @@ import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.widget.*;
-import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,14 +27,18 @@ public class ClientBT extends Activity {
     private BluetoothDevice btDevice;
     private BluetoothAdapter btAdapter;
     private BluetoothSocket btSocket;
-    private SocketHandler socketHandler;
+    private SocketHandlerThread socketHandler;
     private EditText messageEditText;
     private Button send;
 
     private List<String> messages;
-    private ListView messagesListView;
+    private ListView messagesLogListView;
     private InputDataHandler inputDataHandler;
     private TextView statusTextView;
+    private List<BTMessage> messagesObj;
+    private Button disconnectButton;
+    private Button debugButton;
+    private CheckBox showBytesCheckBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -86,16 +89,17 @@ public class ClientBT extends Activity {
 
     private void initInputHandler() {
         messages = new ArrayList<String>();
+        messagesObj = new ArrayList<BTMessage>();
         inputDataHandler = new InputDataHandler();
     }
 
     private boolean connectSocket() {
-        Log.d(Utils.TAG, "***Соединяемся...***");
+        Log.d(Utils.TAG, "***Connecting...***");
         try {
             if (!btSocket.isConnected())
                 btSocket.connect();
             Log.d(Utils.TAG, "***Соединение успешно установлено***");
-            socketHandler = new SocketHandler(btSocket);
+            socketHandler = new SocketHandlerThread(btSocket);
             socketHandler.start();
             return true;
         } catch (IOException e) {
@@ -150,22 +154,102 @@ public class ClientBT extends Activity {
             @Override
             public void onClick(View view) {
                 String message = messageEditText.getText().toString();
-                if (message.isEmpty()) {
+                if (message.isEmpty() || btSocket == null || !btSocket.isConnected()) {
                     return;
                 }
                 socketHandler.sendData(message);
                 messageEditText.setText("");
             }
         });
-        messagesListView = (ListView) findViewById(R.id.clientBtMessagesListView);
+        messagesLogListView = (ListView) findViewById(R.id.clientBtMessagesListView);
+        disconnectButton = (Button) findViewById(R.id.disconnectButton);
+        disconnectButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                disconnectSocket();
+            }
+        });
+        debugButton = (Button) findViewById(R.id.debugButton);
+        debugButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                iterateSvetodiodZozulya();
+            }
+        });
+        showBytesCheckBox = (CheckBox) findViewById(R.id.showBytesCheckBox);
+        showBytesCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                refreshMessageLogListView();
+            }
+        });
+
     }
 
-    private class SocketHandler extends Thread {
+    private void iterateSvetodiodZozulya() {
+        int count = 5;
+        long delay;
+        int type = 2;
+        try {
+            delay = Integer.valueOf(messageEditText.getText().toString());
+        } catch (Exception e) {
+            delay = 100;
+        }
+        for (int i = 0; i < count; i++) {
+            if (type == 1)
+                for (int index = 1; i <= 8; index++) {
+                    socketHandler.sendData(index + "");
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            if (type == 2) {
+                int index = 1;
+                boolean top = true;
+                while (true) {
+                    if (index == 0) {
+                        break;
+                    }
+                    if (index == 9) {
+                        top = !top;
+                        index--;
+                    }
+                    socketHandler.sendData(index + "");
+                    if (top) {
+                        index++;
+                    } else {
+                        index--;
+                    }
+                    try {
+                        Thread.sleep(delay);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+        }
+    }
+
+    private void disconnectSocket() {
+        if (btSocket != null && btSocket.isConnected()) {
+            try {
+                btSocket.close();
+                statusTextView.setText("Disconnected!");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private class SocketHandlerThread extends Thread {
         private final BluetoothSocket socket;
         private final OutputStream outStream;
         private final InputStream inpStream;
 
-        public SocketHandler(BluetoothSocket btSocket) {
+        public SocketHandlerThread(BluetoothSocket btSocket) {
             this.socket = btSocket;
             OutputStream tmpOut = null;
             InputStream tmpIn = null;
@@ -199,10 +283,11 @@ public class ClientBT extends Activity {
             }
         }
 
-        public void sendData(String message) {
-            addToMessagesList("SEND: " + message);
-            byte[] msgBuffer = message.getBytes();
-            Log.d(Utils.TAG, "Send data: " + message + "***");
+        public void sendData(String messageString) {
+            byte[] msgBuffer = messageString.getBytes();
+            BTMessage message = new BTMessage(messageString, msgBuffer, BTMessage.Types.SEND);
+            addToMessagesList(message);
+            Log.d(Utils.TAG, "Send data: " + messageString + "***");
 
             try {
                 outStream.write(msgBuffer);
@@ -216,20 +301,31 @@ public class ClientBT extends Activity {
         public void handleMessage(android.os.Message msg) {
             byte[] readBuf = (byte[]) msg.obj;
             String stringInput = new String(readBuf, 0, msg.arg1);
-            stringInput = "RECEIVED: " + stringInput;
-            addToMessagesList(stringInput);
+            byte[] bytesToSave = new byte[msg.arg1];
+            System.arraycopy(readBuf, 0, bytesToSave, 0, msg.arg1);
+            BTMessage message = new BTMessage(stringInput, bytesToSave, BTMessage.Types.RECEIVED);
+            addToMessagesList(message);
         }
     }
 
-    private void addToMessagesList(String string) {
-        messages.add(string);
+    private void addToMessagesList(BTMessage message) {
+        messagesObj.add(message);
+
+        refreshMessageLogListView();
+    }
+
+    private void refreshMessageLogListView() {
+        messages = new ArrayList<String>();
+        for (BTMessage btMessage : messagesObj) {
+            messages.add(btMessage.getLogString(showBytesCheckBox.isChecked()));
+        }
         ArrayList<String> messagesCloned = (ArrayList<String>) ((ArrayList<String>) messages).clone();
         try {
             clone();
         } catch (CloneNotSupportedException e) {
         }
         Collections.reverse(messagesCloned);
-        messagesListView.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, messagesCloned));
+        messagesLogListView.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, messagesCloned));
     }
 
 }

@@ -25,6 +25,28 @@
                 android:text="status"
                 android:id="@+id/statusTextView" android:textColor="@android:color/holo_blue_bright"/>
     </LinearLayout>
+    <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
+        <Button
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Disc"
+                android:id="@+id/disconnectButton"/>
+        <Button
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Debug"
+                android:id="@+id/debugButton"/>
+        <CheckBox
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Show bytes"
+                android:id="@+id/showBytesCheckBox"/>
+    </LinearLayout>
     <ListView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
