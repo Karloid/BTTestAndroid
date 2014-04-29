@@ -23,6 +23,7 @@ import java.util.*;
 public class ClientBT extends Activity {
     private static final int REQUEST_ENABLE_BT = 1;
     public static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final byte TERMINATOR_BYTE = 0;
     private String mac;
     private BluetoothDevice btDevice;
     private BluetoothAdapter btAdapter;
@@ -39,6 +40,7 @@ public class ClientBT extends Activity {
     private Button disconnectButton;
     private Button debugButton;
     private CheckBox showBytesCheckBox;
+    private CheckBox sendTerminatorByteCheckBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -183,7 +185,7 @@ public class ClientBT extends Activity {
                 refreshMessageLogListView();
             }
         });
-
+        sendTerminatorByteCheckBox = (CheckBox) findViewById(R.id.sendTerminatorByteCheckBox);
     }
 
     private void iterateSvetodiodZozulya() {
@@ -285,6 +287,12 @@ public class ClientBT extends Activity {
 
         public void sendData(String messageString) {
             byte[] msgBuffer = messageString.getBytes();
+            if (sendTerminatorByteCheckBox.isChecked()) {
+                byte[] tmpBuffer = new byte[msgBuffer.length + 1];
+                System.arraycopy(msgBuffer, 0, tmpBuffer, 0, msgBuffer.length);
+                tmpBuffer[msgBuffer.length + 1 - 1] = TERMINATOR_BYTE;
+                msgBuffer = tmpBuffer;
+            }
             BTMessage message = new BTMessage(messageString, msgBuffer, BTMessage.Types.SEND);
             addToMessagesList(message);
             Log.d(Utils.TAG, "Send data: " + messageString + "***");
