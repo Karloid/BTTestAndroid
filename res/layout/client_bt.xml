@@ -33,6 +33,12 @@
                 style="?android:attr/buttonStyleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="Rec"
+                android:id="@+id/reconnectButton"/>
+        <Button
+                style="?android:attr/buttonStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="Disc"
                 android:id="@+id/disconnectButton"/>
         <Button
@@ -41,16 +47,45 @@
                 android:layout_height="wrap_content"
                 android:text="Debug"
                 android:id="@+id/debugButton"/>
-        <CheckBox
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Show bytes"
-                android:id="@+id/showBytesCheckBox"/>
-        <CheckBox
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="New CheckBox"
-                android:id="@+id/sendTerminatorByteCheckBox" android:checked="true"/>
+        <LinearLayout
+                android:orientation="vertical"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content">
+            <CheckBox
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Show bytes"
+                    android:id="@+id/showBytesCheckBox"/>
+            <CheckBox
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Add terminator"
+                    android:id="@+id/sendTerminatorByteCheckBox" android:checked="true"/>
+        </LinearLayout>
+    </LinearLayout>
+    <Switch
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Advanced"
+            android:id="@+id/advancedSwitch" android:checked="true"/>
+    <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" android:id="@+id/advancedLayout">
+        <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+            <CheckBox
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Send ping"
+                    android:id="@+id/sendPingCheckBox"/>
+            <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/pingTextView" android:textColor="#fff565" android:paddingLeft="15dp"/>
+        </LinearLayout>
     </LinearLayout>
     <ListView
             android:layout_width="wrap_content"

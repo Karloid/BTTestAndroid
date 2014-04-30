@@ -27,6 +27,7 @@ import java.util.logging.LogRecord;
  */
 public class ServerBTActivity extends Activity {
     private static final UUID MY_UUID_SECURE = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private static final boolean SET_DISCOVERABLE = false;
     public static BluetoothSocket pickedSocket;
     private BluetoothAdapter mBluetoothAdapter;
     private TextView status;
@@ -45,14 +46,14 @@ public class ServerBTActivity extends Activity {
     }
 
     private void initViews() {
-      status = (TextView) findViewById(R.id.statusTextView);
-      acceptedSockets = (ListView) findViewById(R.id.serverAcceptedSocketsListView);
-      acceptedSockets.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-          @Override
-          public void onItemClick(AdapterView<?> adapterView, View view, int index, long l) {
-             startClientActivity(socketHandlers.get(index));
-          }
-      });
+        status = (TextView) findViewById(R.id.statusTextView);
+        acceptedSockets = (ListView) findViewById(R.id.serverAcceptedSocketsListView);
+        acceptedSockets.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int index, long l) {
+                startClientActivity(socketHandlers.get(index));
+            }
+        });
     }
 
     private void startClientActivity(SocketHandler socketHandler) {
@@ -70,11 +71,12 @@ public class ServerBTActivity extends Activity {
             status.setText("Does not support bluetooth");
             return;
         }
-
-        Intent discoverableIntent = new
-                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
-        discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
-        startActivity(discoverableIntent);
+        if (SET_DISCOVERABLE) {
+            Intent discoverableIntent = new
+                    Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE);
+            discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300);
+            startActivity(discoverableIntent);
+        }
         status.setText("Discoverable!");
 
         createServerSocket();
@@ -84,14 +86,14 @@ public class ServerBTActivity extends Activity {
     }
 
     private void createServerSocket() {
-            BluetoothServerSocket tmp = null;
-            try {
-                tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord("MYYAPP", MY_UUID_SECURE);
+        BluetoothServerSocket tmp = null;
+        try {
+            tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord("MYYAPP", MY_UUID_SECURE);
 
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            serverSocket = tmp;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        serverSocket = tmp;
     }
 
     private class RunnerThread extends Thread {
@@ -108,11 +110,12 @@ public class ServerBTActivity extends Activity {
                 Log.d(Utils.TAG, "try accept");
                 socket = serverSocket.accept();
                 socketHandlers.add(new SocketHandler(socket));
-                uiHandler.obtainMessage(0, 0, -1, 0).sendToTarget();;
-                Log.d(Utils.TAG, "accepted" );
+                uiHandler.obtainMessage(0, 0, -1, 0).sendToTarget();
+                ;
+                Log.d(Utils.TAG, "accepted");
             } catch (IOException e) {
-                Log.d(Utils.TAG, "error in loop" + e.getMessage() );
-           //     break;
+                Log.d(Utils.TAG, "error in loop" + e.getMessage());
+                //     break;
             }
         /*    if (socket != null) {
                 Log.d(Utils.TAG, "try close" );
@@ -150,7 +153,7 @@ public class ServerBTActivity extends Activity {
         int i = 0;
         for (SocketHandler socketHandler : socketHandlers) {
             i++;
-            socketsNames.add(i +" socket");
+            socketsNames.add(i + " socket");
         }
         acceptedSockets.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, socketsNames));
     }

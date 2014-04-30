@@ -8,9 +8,11 @@ import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.View;
 import android.widget.*;
+import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +25,13 @@ import java.util.*;
 public class ClientBT extends Activity {
     private static final int REQUEST_ENABLE_BT = 1;
     public static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-    private static final byte TERMINATOR_BYTE = 0;
+    private static final byte TERMINATOR_BYTE = "~".getBytes()[0]; // dirt
+    private static final String PING_REQUEST = "9";
+    private static final long PING_DELAY_MS = 2000;
+    private static final int UI_MESSAGE_SEND = 1;
+    private static final int UI_MESSAGE_RECEIVED = 2;
+    private static final int UI_PING_SHOW = 3;
+    private static final String PING_RESPONSE = "7";
     private String mac;
     private BluetoothDevice btDevice;
     private BluetoothAdapter btAdapter;
@@ -34,13 +42,19 @@ public class ClientBT extends Activity {
 
     private List<String> messages;
     private ListView messagesLogListView;
-    private InputDataHandler inputDataHandler;
     private TextView statusTextView;
     private List<BTMessage> messagesObj;
     private Button disconnectButton;
     private Button debugButton;
     private CheckBox showBytesCheckBox;
     private CheckBox sendTerminatorByteCheckBox;
+    private Button reconnectButton;
+    private Switch advancedSwitch;
+    private LinearLayout advancedLayout;
+    private CheckBox sendPingCheckBox;
+    private PingThread pingThread;
+    private UIHandler uiHandler;
+    private TextView pingTextView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,7 +106,7 @@ public class ClientBT extends Activity {
     private void initInputHandler() {
         messages = new ArrayList<String>();
         messagesObj = new ArrayList<BTMessage>();
-        inputDataHandler = new InputDataHandler();
+        uiHandler = new UIHandler();
     }
 
     private boolean connectSocket() {
@@ -163,6 +177,13 @@ public class ClientBT extends Activity {
                 messageEditText.setText("");
             }
         });
+        reconnectButton = (Button) findViewById(R.id.reconnectButton);
+        reconnectButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                connectSocket();
+            }
+        });
         messagesLogListView = (ListView) findViewById(R.id.clientBtMessagesListView);
         disconnectButton = (Button) findViewById(R.id.disconnectButton);
         disconnectButton.setOnClickListener(new View.OnClickListener() {
@@ -186,6 +207,36 @@ public class ClientBT extends Activity {
             }
         });
         sendTerminatorByteCheckBox = (CheckBox) findViewById(R.id.sendTerminatorByteCheckBox);
+        advancedLayout = (LinearLayout) findViewById(R.id.advancedLayout);
+        advancedSwitch = (Switch) findViewById(R.id.advancedSwitch);
+        advancedSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                if (b) {
+                    advancedLayout.setVisibility(View.VISIBLE);
+                } else {
+                    advancedLayout.setVisibility(View.INVISIBLE);
+                }
+            }
+        });
+        sendPingCheckBox = (CheckBox) findViewById(R.id.sendPingCheckBox);
+        sendPingCheckBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
+                managePing(b);
+            }
+        });
+        pingTextView = (TextView) findViewById(R.id.pingTextView);
+
+    }
+
+    private void managePing(boolean start) {
+        if (start) {
+            pingThread = new PingThread();
+            pingThread.start();
+        } else {
+            pingThread.interrupt();
+        }
     }
 
     private void iterateSvetodiodZozulya() {
@@ -251,6 +302,11 @@ public class ClientBT extends Activity {
         private final OutputStream outStream;
         private final InputStream inpStream;
 
+
+        byte[] buffer = new byte[1024];
+        int bufferPos = 0;
+
+
         public SocketHandlerThread(BluetoothSocket btSocket) {
             this.socket = btSocket;
             OutputStream tmpOut = null;
@@ -268,21 +324,63 @@ public class ClientBT extends Activity {
 
         @Override
         public void run() {
+            inputReaderLoop();
+        }
+
+        private void inputReaderLoop() {
             byte[] readedBytes = new byte[1024];
             int countBytes;
 
+
             while (true) {
                 try {
-                    countBytes = inpStream.read(readedBytes);
-                    Log.d(Utils.TAG, "data from socket " + countBytes);
-                    inputDataHandler.obtainMessage(1, countBytes, -1, readedBytes).sendToTarget();
+                    if (advancedSwitch.isChecked()) {
 
+                        countBytes = inpStream.read(readedBytes);
+                        byte[] trimmedBytes = new byte[countBytes];
+                        System.arraycopy(readedBytes, 0, trimmedBytes, 0, countBytes);
+                        addToBuffer(trimmedBytes);
+
+                        byte[] messageBytes = getMessageFromBuffer();
+                        if (messageBytes != null)
+                            uiHandler.obtainMessage(UI_MESSAGE_RECEIVED, -1, -1, messageBytes).sendToTarget();
+                    } else {
+                        countBytes = inpStream.read(readedBytes);
+                        byte[] trimmedBytes = new byte[countBytes];
+                        System.arraycopy(readedBytes, 0, trimmedBytes, 0, countBytes);
+                        uiHandler.obtainMessage(UI_MESSAGE_RECEIVED, -1, -1, trimmedBytes).sendToTarget();
+                    }
                 } catch (IOException e) {
                     e.printStackTrace();
                     break;
                 }
 
             }
+        }
+
+        private byte[] getMessageFromBuffer() {
+            byte[] message = null;
+            int terminatorPos = -1;
+            for (int i = 0; i <= bufferPos; i++) {
+                if (buffer[i] == TERMINATOR_BYTE) {
+                    terminatorPos = i;
+                }
+            }
+            if (terminatorPos != -1) {
+                message = new byte[terminatorPos];
+                System.arraycopy(buffer, 0, message, 0, terminatorPos);
+                int newBufferLength = bufferPos - terminatorPos;
+                byte[] newBuffer = new byte[1024];
+                System.arraycopy(buffer, terminatorPos, newBuffer, 0, newBufferLength);
+                bufferPos = 0;
+                buffer = newBuffer;
+            }
+            return message;
+        }
+
+        private void addToBuffer(byte[] bytes) {
+            System.arraycopy(bytes, 0, buffer, bufferPos, bytes.length);
+            bufferPos += bytes.length;
         }
 
         public void sendData(String messageString) {
@@ -294,8 +392,9 @@ public class ClientBT extends Activity {
                 msgBuffer = tmpBuffer;
             }
             BTMessage message = new BTMessage(messageString, msgBuffer, BTMessage.Types.SEND);
-            addToMessagesList(message);
-            Log.d(Utils.TAG, "Send data: " + messageString + "***");
+            uiHandler.obtainMessage(UI_MESSAGE_SEND, -1, -1, message).sendToTarget();
+            //  addToMessagesList(message);
+            //Log.d(Utils.TAG, "Send data: " + messageString + "***");
 
             try {
                 outStream.write(msgBuffer);
@@ -305,13 +404,44 @@ public class ClientBT extends Activity {
         }
     }
 
-    private class InputDataHandler extends Handler {
+
+    private class UIHandler extends Handler {
         public void handleMessage(android.os.Message msg) {
-            byte[] readBuf = (byte[]) msg.obj;
-            String stringInput = new String(readBuf, 0, msg.arg1);
-            byte[] bytesToSave = new byte[msg.arg1];
-            System.arraycopy(readBuf, 0, bytesToSave, 0, msg.arg1);
-            BTMessage message = new BTMessage(stringInput, bytesToSave, BTMessage.Types.RECEIVED);
+            if (msg.what == UI_MESSAGE_SEND) {
+                messageSend(msg);
+            } else if (msg.what == UI_MESSAGE_RECEIVED) {
+                messageReceived(msg);
+            } else if (msg.what == UI_PING_SHOW) {
+                pingShow(msg);
+            }
+        }
+
+        private void pingShow(Message msg) {
+            pingTextView.setText((Long)(msg.obj) + "ms");
+        }
+
+        private void messageSend(Message msg) {
+            BTMessage message = (BTMessage) msg.obj;
+            addToMessagesList(message);
+        }
+
+        private void messageReceived(Message msg) {
+            if (advancedSwitch.isChecked()) {
+                if (pingThread == null) {    // TODO fix
+                    pingThread = new PingThread();
+                }
+                pingThread.handlePingMessage(msg);
+                saveAndShowMessage(msg);
+            } else {
+                saveAndShowMessage(msg);
+            }
+        }
+
+
+        private void saveAndShowMessage(Message msg) {
+            byte[] readedBytes = (byte[]) msg.obj;
+            String stringInput = new String(readedBytes);
+            BTMessage message = new BTMessage(stringInput, readedBytes, BTMessage.Types.RECEIVED);
             addToMessagesList(message);
         }
     }
@@ -336,4 +466,45 @@ public class ClientBT extends Activity {
         messagesLogListView.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, messagesCloned));
     }
 
+    private class PingThread extends Thread {
+        int requestId;
+        private long lastRequestTime;
+
+        @Override
+        public void run() {
+            pingLoop();
+        }
+
+        private void pingLoop() {
+            try {
+                requestId = 10;
+                while (true) {
+                    requestId++;
+                    if (requestId == 100) {
+                        requestId = 10;
+                    }
+                    socketHandler.sendData(PING_REQUEST + requestId);
+                    lastRequestTime = System.currentTimeMillis();
+                    Thread.sleep(PING_DELAY_MS);
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        public void handlePingMessage(Message msg) {
+            String stringInput = new String((byte[]) msg.obj);
+            if (stringInput.length() == 3) {
+                if (stringInput.substring(0, 1).equals(PING_REQUEST)) {
+                    socketHandler.sendData(PING_RESPONSE + stringInput.substring(1));
+                }
+                if (stringInput.substring(0, 1).equals(PING_RESPONSE)) {
+                    if (Integer.valueOf(stringInput.substring(1)) == requestId) {
+                        long ping = System.currentTimeMillis() - lastRequestTime;
+                        uiHandler.obtainMessage(UI_PING_SHOW, -1, -1, ping).sendToTarget();
+                    }
+                }
+            }
+        }
+    }
 }
