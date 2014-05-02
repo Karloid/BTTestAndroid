@@ -30,7 +30,7 @@ public class ClientBT extends Activity {
     private static final long PING_DELAY_MS = 2000;
     private static final int UI_MESSAGE_SEND = 1;
     private static final int UI_MESSAGE_RECEIVED = 2;
-    private static final int UI_PING_SHOW = 3;
+    private static final int UI_PING_SHOW = 3;                                                                             ;
     private static final String PING_RESPONSE = "7";
     private String mac;
     private BluetoothDevice btDevice;

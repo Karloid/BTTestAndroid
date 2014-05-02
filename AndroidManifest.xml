@@ -14,8 +14,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".FindBTDevices"/>
-        <activity android:name=".ClientBT"/>
-        <activity android:name=".ServerBTActivity"/>
+        <activity android:name=".FindBTDevices" android:screenOrientation="portrait"/>
+        <activity android:name=".ClientBT" android:screenOrientation="portrait"/>
+        <activity android:name=".ServerBTActivity" android:screenOrientation="portrait"/>
     </application>
 </manifest>
